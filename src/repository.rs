@@ -1,12 +1,14 @@
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
+use std::{env, error::Error};
 use surrealdb::{engine::local::Db, Surreal};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ServiceConfig {
     pub created: DateTime<Utc>,
     pub rss_proxy: String,
+    pub rabbitmq_uri: String,
+    pub rabbitmq_queue: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -118,23 +120,53 @@ async fn init_db(db: &Surreal<Db>) -> Result<ServiceConfig, Box<dyn Error>> {
         .create("config")
         .content(ServiceConfig {
             created: Utc::now(),
-            rss_proxy: String::from("https://rss.x.qrd.wtf/makefulltextfeed.php?url="),
+            rss_proxy: env::var("INIT_RSS_PROXY").unwrap_or(String::from(
+                "http://ftr.fivefilters.org/makefulltextfeed.php?url=",
+            )),
+            rabbitmq_uri: env::var("INIT_RABBITMQ_URI")
+                .unwrap_or(String::from("amqp://guest:guest@localhost:5672/%2f")),
+            rabbitmq_queue: env::var("INIT_RABBITMQ_QUEUE").unwrap_or(String::from("feeder")),
         })
         .await?
         .into_iter()
         .next()
         .unwrap();
 
-    let _: Vec<DbFeed> = db
-        .create("feed")
-        .content(DbFeed {
-            url: String::from("http://feeds.bbci.co.uk/news/world/rss.xml"),
-            name: String::from("BBC News"),
-            cron: String::from("0 */2 * * * *"),
-            enabled: true,
-            last_run: Utc::now(),
-        })
-        .await?;
+    match env::var("INIT_RSS_FEEDS") {
+        Ok(feeds) => {
+            for feed in feeds.split(";") {
+                let feed = feed.trim();
+                let feed = feed.split(",").collect::<Vec<&str>>();
+
+                let url = feed[0];
+                let name = feed[1];
+                let cron = feed[2];
+
+                let _: Vec<DbFeed> = db
+                    .create("feed")
+                    .content(DbFeed {
+                        url: String::from(url),
+                        name: String::from(name),
+                        cron: String::from(cron),
+                        enabled: true,
+                        last_run: Utc::now(),
+                    })
+                    .await?;
+            }
+        }
+        Err(_) => {
+            let _: Vec<DbFeed> = db
+                .create("feed")
+                .content(DbFeed {
+                    url: String::from("http://feeds.bbci.co.uk/news/world/rss.xml"),
+                    name: String::from("BBC News"),
+                    cron: String::from("0 */5 * * * *"),
+                    enabled: true,
+                    last_run: Utc::now(),
+                })
+                .await?;
+        }
+    }
 
     Ok(config)
 }

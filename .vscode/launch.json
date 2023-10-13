@@ -20,6 +20,7 @@
                 }
             },
             "args": [],
+            "envFile": "${workspaceFolder}/.env",
             "cwd": "${workspaceFolder}"
         },
         {
@@ -39,6 +40,7 @@
                 }
             },
             "args": [],
+            "envFile": "${workspaceFolder}/.env",
             "cwd": "${workspaceFolder}"
         }
     ]

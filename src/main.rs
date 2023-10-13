@@ -1,6 +1,7 @@
 mod repository;
 
 use chrono::prelude::*;
+use lapin::{options::QueueDeclareOptions, Connection, ConnectionProperties};
 use regex::Regex;
 use repository::{DbFeed, Repository};
 use rss::Channel;
@@ -22,6 +23,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let config = repository.get_config().await?;
     let feeds = repository.get_active_feeds().await?;
+
+    let mq = Connection::connect(
+        config.rabbitmq_uri.as_str(),
+        ConnectionProperties::default(),
+    )
+    .await?;
 
     // a channel to load rss feed to on cron tick
     let (job_tick, job_on_tick) = channel();
@@ -52,6 +59,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let tag_regex = Regex::new(r"<[^>]+>").unwrap();
     let space_regex = Regex::new(r"[ ]{2,}").unwrap();
+
+    let mq_channel = mq.create_channel().await?;
+    mq_channel
+        .queue_declare(
+            config.rabbitmq_queue.as_str(),
+            QueueDeclareOptions {
+                durable: true,
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .await?;
 
     while let Ok(feed) = job_on_tick.recv() {
         let mut feed = feed.write().unwrap();
