@@ -1,80 +1,106 @@
+mod repository;
+
 use chrono::prelude::*;
 use regex::Regex;
+use repository::{DbFeed, Repository};
 use rss::Channel;
-use serde::{Deserialize, Serialize};
-use std::{env, error::Error};
-use surrealdb::{engine::local::RocksDb, Surreal};
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ServiceConfig {
-    created: DateTime<Utc>,
-    rss_proxy: String,
-}
+use std::{env, error::Error, sync::{Arc, mpsc::channel, RwLock}};
+use surrealdb::{
+    engine::local::{Db, RocksDb},
+    Surreal,
+};
+use tokio_cron_scheduler::{Job, JobScheduler};
 
 #[tokio::main]
+#[allow(unreachable_code)]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let db = get_db().await?;
+    let repository = Repository::new(&db);
+
+    let config = Arc::new(repository.get_config().await?);
+    let feeds = repository
+        .get_feeds()
+        .await?
+        .into_iter()
+        .filter(|feed| feed.enabled);
+
+    let sched = JobScheduler::new().await?;
+
+    let (sender, receiver) = channel();
+
+    for feed in feeds {
+        let exec = sender.clone();
+        let cron = feed.cron.clone();
+        let feed = Arc::new(RwLock::new(feed));
+
+        let feed_job = Job::new(cron.as_str(), move |_uuid, _l| {
+            let feed = Arc::clone(&feed);
+            exec.send(feed).unwrap()
+        })
+        .unwrap();
+        sched.add(feed_job).await?;
+    }
+
+    #[cfg(feature = "signal")]
+    sched.shutdown_on_ctrl_c();
+
+    sched.start().await?;
+
     let tag_regex = Regex::new(r"<[^>]+>").unwrap();
     let space_regex = Regex::new(r"[ ]{2,}").unwrap();
 
-    load_config().await?;
+    while let Ok(feed) = receiver.recv() {
+        let mut feed = feed.write().unwrap();
+        if let Ok(channel) = load_feed(&config.rss_proxy.as_str(), &feed).await {
+            repository.mark_feed_last_run(&mut feed).await?;
 
-    let feed = example_feed().await;
-    feed.map(|channel| {
-        for item in channel.items() {
-            println!("Title: {}", item.title().unwrap());
-            println!("Link: {}", item.link().unwrap());
-            println!(
-                "Description: {}\n",
-                space_regex.replace_all(
-                    &tag_regex.replace_all(item.description().unwrap(), r" "),
-                    r"\n"
-                )
-            );
+            for item in channel.items() {
+                println!("Id: {:?}", item.guid().unwrap());
+                println!("Title: {}", item.title().unwrap());
+                println!("Link: {}", item.link().unwrap());
+                println!(
+                    "Description: {}\n",
+                    space_regex.replace_all(
+                        &tag_regex.replace_all(item.description().unwrap(), r" "),
+                        r"\n"
+                    )
+                );
+            }
         }
-    })
-    .unwrap_or_else(|err| {
-        println!("error: {}", err);
-    });
-    println!("Hello, world!");
+    }
 
     Ok(())
 }
 
-async fn load_config() -> Result<ServiceConfig, Box<dyn Error>> {
-    let path = env::current_dir().unwrap();
-    let db = Surreal::new::<RocksDb>(path.join("db")).await?;
+async fn get_db() -> Result<Surreal<Db>, Box<dyn Error>> {
+    let path = env::current_dir()?;
+    let path = path.join("db");
+
+    let db = Surreal::new::<RocksDb>(path).await?;
     db.use_ns("dbo").use_db("default").await?;
 
-    let mut config: Option<ServiceConfig> = db
-        .query("select * from config order by created desc limit 1")
-        .await?
-        .take(0)?;
-
-    if config.is_none() {
-        config = db
-            .create("config")
-            .content(ServiceConfig {
-                created: Utc::now(),
-                rss_proxy: "https://rss.x.qrd.wtf/makefulltextfeed.php?url=".to_string(),
-            })
-            .await?
-            .into_iter()
-            .next();
-    }
-
-    println!("config: {:?}", config);
-
-    Ok(config.unwrap())
+    Ok(db)
 }
 
-async fn example_feed() -> Result<Channel, Box<dyn Error>> {
-    let content = reqwest::get(
-        "https://rss.x.qrd.wtf/makefulltextfeed.php?url=http://feeds.bbci.co.uk/news/world/rss.xml",
-    )
-    .await?
-    .bytes()
-    .await?;
-    let channel = Channel::read_from(&content[..])?;
+async fn load_feed(proxy: &str, feed: &DbFeed) -> Result<Channel, Box<dyn Error>> {
+    let proxy = proxy.to_owned();
+    let feed_url = feed.url.as_str();
+    let load_url = proxy + feed_url;
+
+    let content = reqwest::get(load_url).await?.bytes().await?;
+    let mut channel = Channel::read_from(&content[..])?;
+
+    // filter out channel items that have pub_date after feed.last_run
+    channel.items = channel
+        .items()
+        .into_iter()
+        .filter(|item| {
+            let pub_date = item.pub_date().unwrap();
+            let pub_date = DateTime::parse_from_rfc2822(pub_date).unwrap();
+            pub_date > feed.last_run
+        })
+        .cloned()
+        .collect();
 
     Ok(channel)
 }
