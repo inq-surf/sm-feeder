@@ -4,7 +4,11 @@ use chrono::prelude::*;
 use regex::Regex;
 use repository::{DbFeed, Repository};
 use rss::Channel;
-use std::{env, error::Error, sync::{Arc, mpsc::channel, RwLock}};
+use std::{
+    env,
+    error::Error,
+    sync::{mpsc::channel, Arc, RwLock},
+};
 use surrealdb::{
     engine::local::{Db, RocksDb},
     Surreal,
@@ -16,44 +20,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let db = get_db().await?;
     let repository = Repository::new(&db);
 
-    let config = Arc::new(repository.get_config().await?);
-    let feeds = repository
-        .get_feeds()
-        .await?
-        .into_iter()
-        .filter(|feed| feed.enabled);
+    let config = repository.get_config().await?;
+    let feeds = repository.get_active_feeds().await?;
 
-    let sched = JobScheduler::new().await?;
+    // a channel to load rss feed to on cron tick
+    let (job_tick, job_on_tick) = channel();
 
-    let (sender, receiver) = channel();
+    let scheduler = JobScheduler::new().await?;
 
     for feed in feeds {
-        let exec = sender.clone();
-        let cron = feed.cron.clone();
+        let job_tick = job_tick.clone();
+        let job_cron = feed.cron.clone();
+        let job_cron = job_cron.as_str();
+
         let feed = Arc::new(RwLock::new(feed));
 
-        let feed_job = Job::new(cron.as_str(), move |_uuid, _l| {
+        let feed_job = Job::new(job_cron, move |_uuid, _l| {
             let feed = Arc::clone(&feed);
-            exec.send(feed).unwrap()
+
+            job_tick.send(feed).unwrap()
         })
         .unwrap();
-        sched.add(feed_job).await?;
+
+        scheduler.add(feed_job).await?;
     }
 
     #[cfg(feature = "signal")]
     sched.shutdown_on_ctrl_c();
 
-    sched.start().await?;
+    scheduler.start().await?;
 
     let tag_regex = Regex::new(r"<[^>]+>").unwrap();
     let space_regex = Regex::new(r"[ ]{2,}").unwrap();
 
-    while let Ok(feed) = receiver.recv() {
+    while let Ok(feed) = job_on_tick.recv() {
         let mut feed = feed.write().unwrap();
+
         if let Ok(channel) = load_feed(&config.rss_proxy.as_str(), &feed).await {
             repository.mark_feed_last_run(&mut feed).await?;
 
             for item in channel.items() {
+                // todo!("send item to rabbitmq");
                 println!("Id: {:?}", item.guid().unwrap());
                 println!("Title: {}", item.title().unwrap());
                 println!("Link: {}", item.link().unwrap());

@@ -54,6 +54,17 @@ impl<'a> Repository<'a> {
         Ok(feeds)
     }
 
+    pub async fn get_active_feeds(&self) -> Result<Vec<DbFeed>, Box<dyn Error>> {
+        let feeds: Vec<DbFeed> = self
+            .get_feeds()
+            .await?
+            .into_iter()
+            .filter(|feed| feed.enabled)
+            .collect();
+
+        Ok(feeds)
+    }
+
     pub async fn set_feed_name(&self, feed: &DbFeed) -> Result<(), Box<dyn Error>> {
         self.db
             .query("update feed set name = $name where url = $url")
