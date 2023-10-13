@@ -24,6 +24,7 @@ pub struct Repository<'a> {
     db: &'a Surreal<Db>,
 }
 
+#[allow(dead_code)]
 impl<'a> Repository<'a> {
     pub fn new(db: &'a Surreal<Db>) -> Self {
         Self { db }

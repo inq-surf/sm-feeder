@@ -12,7 +12,6 @@ use surrealdb::{
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 #[tokio::main]
-#[allow(unreachable_code)]
 async fn main() -> Result<(), Box<dyn Error>> {
     let db = get_db().await?;
     let repository = Repository::new(&db);
