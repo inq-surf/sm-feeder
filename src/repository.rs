@@ -8,7 +8,8 @@ pub struct ServiceConfig {
     pub created: DateTime<Utc>,
     pub rss_proxy: String,
     pub rabbitmq_uri: String,
-    pub rabbitmq_queue: String,
+    pub rabbitmq_exchange: String,
+    pub rabbitmq_routing_key: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -125,7 +126,9 @@ async fn init_db(db: &Surreal<Db>) -> Result<ServiceConfig, Box<dyn Error>> {
             )),
             rabbitmq_uri: env::var("INIT_RABBITMQ_URI")
                 .unwrap_or(String::from("amqp://guest:guest@localhost:5672/%2f")),
-            rabbitmq_queue: env::var("INIT_RABBITMQ_QUEUE").unwrap_or(String::from("feeder")),
+            rabbitmq_exchange: env::var("INIT_RABBITMQ_EXCHANGE").unwrap_or(String::from("rss")),
+            rabbitmq_routing_key: env::var("INIT_RABBITMQ_ROUTING_KEY")
+                .unwrap_or(String::from("inbox")),
         })
         .await?
         .into_iter()

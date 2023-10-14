@@ -1,10 +1,14 @@
 mod repository;
 
 use chrono::prelude::*;
-use lapin::{options::QueueDeclareOptions, Connection, ConnectionProperties};
+use lapin::{
+    options::{BasicPublishOptions, ExchangeDeclareOptions, QueueDeclareOptions},
+    BasicProperties, Connection, ConnectionProperties, ExchangeKind,
+};
 use regex::Regex;
 use repository::{DbFeed, Repository};
 use rss::Channel;
+use serde::Serialize;
 use std::{
     env,
     error::Error,
@@ -15,6 +19,14 @@ use surrealdb::{
     Surreal,
 };
 use tokio_cron_scheduler::{Job, JobScheduler};
+
+#[derive(Serialize)]
+struct SerializedItem {
+    guid: String,
+    title: String,
+    link: String,
+    description: String,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -62,9 +74,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mq_channel = mq.create_channel().await?;
     mq_channel
-        .queue_declare(
-            config.rabbitmq_queue.as_str(),
-            QueueDeclareOptions {
+        .exchange_declare(
+            config.rabbitmq_exchange.as_str(),
+            ExchangeKind::Topic,
+            ExchangeDeclareOptions {
                 durable: true,
                 ..Default::default()
             },
@@ -79,17 +92,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
             repository.mark_feed_last_run(&mut feed).await?;
 
             for item in channel.items() {
-                // todo!("send item to rabbitmq");
-                println!("Id: {:?}", item.guid().unwrap());
-                println!("Title: {}", item.title().unwrap());
-                println!("Link: {}", item.link().unwrap());
-                println!(
-                    "Description: {}\n",
-                    space_regex.replace_all(
-                        &tag_regex.replace_all(item.description().unwrap(), r" "),
-                        r"\n"
+                let serialized_item = serde_json::to_vec(&SerializedItem {
+                    guid: item.guid().unwrap().value().to_string(),
+                    title: item.title().unwrap().to_string(),
+                    link: item.link().unwrap().to_string(),
+                    description: space_regex
+                        .replace_all(
+                            &tag_regex.replace_all(item.description().unwrap(), r" "),
+                            r"\n",
+                        )
+                        .to_string(),
+                })
+                .unwrap();
+
+                mq_channel
+                    .basic_publish(
+                        &config.rabbitmq_exchange,
+                        &config.rabbitmq_routing_key,
+                        BasicPublishOptions::default(),
+                        &serialized_item,
+                        BasicProperties::default(),
                     )
-                );
+                    .await?;
             }
         }
     }

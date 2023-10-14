@@ -1749,6 +1749,7 @@ dependencies = [
  "pinky-swear",
  "reactor-trait",
  "serde",
+ "serde_json",
  "tracing",
  "waker-fn",
 ]
@@ -3333,6 +3334,7 @@ dependencies = [
  "reqwest",
  "rss",
  "serde",
+ "serde_json",
  "surrealdb",
  "tokio",
  "tokio-cron-scheduler",
