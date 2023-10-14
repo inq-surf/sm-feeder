@@ -2,7 +2,7 @@ mod repository;
 
 use chrono::prelude::*;
 use lapin::{
-    options::{BasicPublishOptions, ExchangeDeclareOptions, QueueDeclareOptions},
+    options::{BasicPublishOptions, ExchangeDeclareOptions},
     BasicProperties, Connection, ConnectionProperties, ExchangeKind,
 };
 use regex::Regex;
