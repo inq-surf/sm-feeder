@@ -1,23 +1,20 @@
-mod repository;
+mod feed;
+mod vault;
 
-use chrono::prelude::*;
+use std::{
+    error::Error,
+    sync::{mpsc::channel, Arc, RwLock},
+};
+
+use feed::load_feed;
 use lapin::{
     options::{BasicPublishOptions, ExchangeDeclareOptions},
     BasicProperties, Connection, ConnectionProperties, ExchangeKind,
 };
 use regex::Regex;
-use repository::{DbFeed, Repository};
-use rss::Channel;
+use vault::{storage::Vault, connection::get_db};
 use serde::Serialize;
-use std::{
-    env,
-    error::Error,
-    sync::{mpsc::channel, Arc, RwLock},
-};
-use surrealdb::{
-    engine::local::{Db, RocksDb},
-    Surreal,
-};
+
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 #[derive(Serialize)]
@@ -31,7 +28,7 @@ struct SerializedItem {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let db = get_db().await?;
-    let repository = Repository::new(&db);
+    let repository = Vault::new(&db);
 
     let config = repository.get_config().await?;
     let feeds = repository.get_active_feeds().await?;
@@ -119,37 +116,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
-}
-
-async fn get_db() -> Result<Surreal<Db>, Box<dyn Error>> {
-    let path = env::current_dir()?;
-    let path = path.join("db");
-
-    let db = Surreal::new::<RocksDb>(path).await?;
-    db.use_ns("dbo").use_db("default").await?;
-
-    Ok(db)
-}
-
-async fn load_feed(proxy: &str, feed: &DbFeed) -> Result<Channel, Box<dyn Error>> {
-    let proxy = proxy.to_owned();
-    let feed_url = feed.url.as_str();
-    let load_url = proxy + feed_url;
-
-    let content = reqwest::get(load_url).await?.bytes().await?;
-    let mut channel = Channel::read_from(&content[..])?;
-
-    // filter out channel items that have pub_date after feed.last_run
-    channel.items = channel
-        .items()
-        .into_iter()
-        .filter(|item| {
-            let pub_date = item.pub_date().unwrap();
-            let pub_date = DateTime::parse_from_rfc2822(pub_date).unwrap();
-            pub_date > feed.last_run
-        })
-        .cloned()
-        .collect();
-
-    Ok(channel)
 }
