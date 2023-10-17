@@ -1,5 +1,5 @@
 mod feed;
-mod vault;
+mod data;
 
 use std::{
     error::Error,
@@ -12,7 +12,7 @@ use lapin::{
     BasicProperties, Connection, ConnectionProperties, ExchangeKind,
 };
 use regex::Regex;
-use vault::{storage::Vault, connection::get_db};
+use data::{Vault, connection::get_db};
 use serde::Serialize;
 
 use tokio_cron_scheduler::{Job, JobScheduler};

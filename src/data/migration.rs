@@ -3,15 +3,15 @@ use std::{env, error::Error};
 use chrono::Utc;
 use surrealdb::{engine::local::Db, Surreal};
 
-use super::models::{service_config::ServiceConfig, feed::DbFeed};
+use super::models::{Config, Feed};
 
 /// Initialize the database with default values
 ///
 /// Returns the config
-pub async fn init_db(db: &Surreal<Db>) -> Result<ServiceConfig, Box<dyn Error>> {
+pub async fn seed_db(db: &Surreal<Db>) -> Result<Config, Box<dyn Error>> {
     let config = db
         .create("config")
-        .content(ServiceConfig {
+        .content(Config {
             created: Utc::now(),
             rss_proxy: env::var("INIT_RSS_PROXY").unwrap_or(String::from(
                 "http://ftr.fivefilters.org/makefulltextfeed.php?url=",
@@ -37,9 +37,9 @@ pub async fn init_db(db: &Surreal<Db>) -> Result<ServiceConfig, Box<dyn Error>> 
                 let name = feed[1];
                 let cron = feed[2];
 
-                let _: Vec<DbFeed> = db
+                let _: Vec<Feed> = db
                     .create("feed")
-                    .content(DbFeed {
+                    .content(Feed {
                         url: String::from(url),
                         name: String::from(name),
                         cron: String::from(cron),
@@ -50,9 +50,9 @@ pub async fn init_db(db: &Surreal<Db>) -> Result<ServiceConfig, Box<dyn Error>> 
             }
         }
         Err(_) => {
-            let _: Vec<DbFeed> = db
+            let _: Vec<Feed> = db
                 .create("feed")
-                .content(DbFeed {
+                .content(Feed {
                     url: String::from("http://feeds.bbci.co.uk/news/world/rss.xml"),
                     name: String::from("BBC News"),
                     cron: String::from("0 */5 * * * *"),

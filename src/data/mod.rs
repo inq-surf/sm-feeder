@@ -1,9 +1,13 @@
+mod migration;
+pub mod connection;
+pub mod models;
+
 use std::error::Error;
 
 use chrono::prelude::*;
 use surrealdb::{engine::local::Db, Surreal};
 
-use super::{migration::init_db, models::{service_config::ServiceConfig, feed::DbFeed}};
+use self::{models::{Config, Feed}, migration::seed_db};
 
 #[derive(Clone)]
 /// Access application data
@@ -18,15 +22,15 @@ impl<'a> Vault<'a> {
     }
 
     /// Get the application config
-    pub async fn get_config(&self) -> Result<ServiceConfig, Box<dyn Error>> {
-        let mut config: Option<ServiceConfig> = self
+    pub async fn get_config(&self) -> Result<Config, Box<dyn Error>> {
+        let mut config: Option<Config> = self
             .db
             .query("select * from config order by created desc limit 1")
             .await?
             .take(0)?;
 
         if config.is_none() {
-            config = Some(init_db(&self.db).await?);
+            config = Some(seed_db(&self.db).await?);
         }
 
         let config = config.ok_or("No config found")?;
@@ -35,14 +39,14 @@ impl<'a> Vault<'a> {
     }
 
     /// Get all feeds
-    pub async fn get_feeds(&self) -> Result<Vec<DbFeed>, Box<dyn Error>> {
-        let feeds: Vec<DbFeed> = self.db.select("feed").await?;
+    pub async fn get_feeds(&self) -> Result<Vec<Feed>, Box<dyn Error>> {
+        let feeds: Vec<Feed> = self.db.select("feed").await?;
 
         Ok(feeds)
     }
 
-    pub async fn get_active_feeds(&self) -> Result<Vec<DbFeed>, Box<dyn Error>> {
-        let feeds: Vec<DbFeed> = self
+    pub async fn get_active_feeds(&self) -> Result<Vec<Feed>, Box<dyn Error>> {
+        let feeds: Vec<Feed> = self
             .get_feeds()
             .await?
             .into_iter()
@@ -52,7 +56,7 @@ impl<'a> Vault<'a> {
         Ok(feeds)
     }
 
-    pub async fn set_feed_name(&self, feed: &DbFeed) -> Result<(), Box<dyn Error>> {
+    pub async fn set_feed_name(&self, feed: &Feed) -> Result<(), Box<dyn Error>> {
         self.db
             .query("update feed set name = $name where url = $url")
             .bind(("url", feed.url.clone()))
@@ -62,7 +66,7 @@ impl<'a> Vault<'a> {
         Ok(())
     }
 
-    pub async fn enable_feed(&self, feed: &mut DbFeed) -> Result<(), Box<dyn Error>> {
+    pub async fn enable_feed(&self, feed: &mut Feed) -> Result<(), Box<dyn Error>> {
         feed.enabled = true;
 
         self.db
@@ -73,7 +77,7 @@ impl<'a> Vault<'a> {
         Ok(())
     }
 
-    pub async fn disable_feed(&self, feed: &mut DbFeed) -> Result<(), Box<dyn Error>> {
+    pub async fn disable_feed(&self, feed: &mut Feed) -> Result<(), Box<dyn Error>> {
         feed.enabled = false;
 
         self.db
@@ -84,7 +88,7 @@ impl<'a> Vault<'a> {
         Ok(())
     }
 
-    pub async fn mark_feed_last_run(&self, feed: &mut DbFeed) -> Result<(), Box<dyn Error>> {
+    pub async fn mark_feed_last_run(&self, feed: &mut Feed) -> Result<(), Box<dyn Error>> {
         feed.last_run = Utc::now();
 
         self.db

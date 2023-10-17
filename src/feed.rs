@@ -3,9 +3,9 @@ use std::error::Error;
 use chrono::DateTime;
 use rss::Channel;
 
-use crate::vault::models::feed::DbFeed;
+use crate::data::models::Feed;
 
-pub async fn load_feed(proxy: &str, feed: &DbFeed) -> Result<Channel, Box<dyn Error>> {
+pub async fn load_feed(proxy: &str, feed: &Feed) -> Result<Channel, Box<dyn Error>> {
     let proxy = proxy.to_owned();
     let feed_url = feed.url.as_str();
     let load_url = proxy + feed_url;
