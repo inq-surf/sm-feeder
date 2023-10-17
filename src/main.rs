@@ -95,8 +95,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     link: item.link().unwrap().to_string(),
                     description: space_regex
                         .replace_all(
-                            &tag_regex.replace_all(item.description().unwrap(), r" "),
-                            r"\n",
+                            &tag_regex.replace_all(item.description().unwrap(), " "),
+                            "\n",
                         )
                         .to_string(),
                 })
