@@ -10,7 +10,6 @@ use std::{
 
 use data::{connection::get_db, Vault};
 use log::info;
-use regex::Regex;
 use serde::Serialize;
 
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -71,9 +70,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     scheduler.start().await?;
 
-    let tag_regex = Regex::new(r"<[^>]+>").unwrap();
-    let space_regex = Regex::new(r"[ ]{2,}").unwrap();
-
     while let Ok(feed) = job_on_tick.recv() {
         let mut feed = feed.write().unwrap();
 
@@ -86,12 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     guid: item.guid().unwrap().value().to_string(),
                     title: item.title().unwrap().to_string(),
                     link: item.link().unwrap().to_string(),
-                    description: space_regex
-                        .replace_all(
-                            &tag_regex.replace_all(item.description().unwrap(), " "),
-                            "\n",
-                        )
-                        .to_string(),
+                    description: item.description().unwrap().to_string(),
                 };
 
                 info!("Publishing item: {}", item.title().unwrap());

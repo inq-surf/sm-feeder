@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use chrono::DateTime;
+use regex::Regex;
 use rss::Channel;
 
 use crate::data::models::Feed;
@@ -22,8 +23,26 @@ pub async fn load_feed(proxy: &str, feed: &Feed) -> Result<Channel, Box<dyn Erro
             let pub_date = DateTime::parse_from_rfc2822(pub_date).unwrap();
             pub_date > feed.last_run
         })
-        .cloned()
+        .map(|item| {
+            let mut item = item.clone();
+
+            item.description = match item.description() {
+                Some(description) => Some(clear_tags(&description)),
+                None => return item,
+            };
+
+            item
+        })
         .collect();
 
     Ok(channel)
+}
+
+fn clear_tags(content: &str) -> String {
+    // TODO: do not recreate regexes on every call
+    let tag_regex = Regex::new(r"<[^>]+>").unwrap();
+    let space_regex = Regex::new(r"[ ]{2,}").unwrap();
+
+    let content = tag_regex.replace_all(content, " ");
+    space_regex.replace_all(&content, "\n").to_string()
 }
