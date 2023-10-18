@@ -8,7 +8,7 @@ use std::{
     sync::{mpsc::channel, Arc, RwLock},
 };
 
-use data::{connection::get_db, Vault};
+use data::Vault;
 use log::info;
 use serde::Serialize;
 
@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     logger::init();
 
     info!("Connecting to database");
-    let db = get_db().await?;
+    let db = data::connection::get_db().await?;
     let vault = Vault::new(&db);
 
     info!("Reading configuration");
