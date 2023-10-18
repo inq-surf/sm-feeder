@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 chrono = { version = "0.4.31", features = ["serde"] }
+env_logger = "0.10.0"
 lapin = { version = "2.3.1", features = ["serde_json"] }
+log = "0.4.20"
 regex = "1.10.0"
 reqwest = "0.11.22"
 rss = "2.0.6"
