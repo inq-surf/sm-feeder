@@ -16,6 +16,7 @@ Initial values.
 | | `INIT_RABBITMQ_ROUTING_KEY` | Routing key for exchange | `inbox` |
 
 `.env` file can be used if running from VSCode (launch.json)
+
 For more about logger configuration follow [env_logger crate documentation](https://docs.rs/env_logger/0.10.0/env_logger/#enabling-logging)
 
 ## Used packages
