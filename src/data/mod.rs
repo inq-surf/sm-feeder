@@ -7,6 +7,7 @@ use std::error::Error;
 use chrono::prelude::*;
 use surrealdb::{engine::local::Db, Surreal};
 
+pub use self::connection::get_db;
 use self::{models::{Config, Feed}, migration::seed_db};
 
 #[derive(Clone)]

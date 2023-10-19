@@ -12,6 +12,7 @@ use data::Vault;
 use log::info;
 use serde::Serialize;
 
+use crate::messaging::Broker;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 #[derive(Serialize)]
@@ -27,7 +28,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     logger::init();
 
     info!("Connecting to database");
-    let db = data::connection::get_db().await?;
+    let db = data::get_db().await?;
     let vault = Vault::new(&db);
 
     info!("Reading configuration");
@@ -35,7 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let feeds = vault.get_active_feeds().await?;
 
     info!("Connecting to RabbitMQ");
-    let broker = messaging::Broker::connect(&config).await?;
+    let broker = Broker::connect(&config).await?;
 
     // a channel to load rss feed to on cron tick
     let (job_tick, job_on_tick) = channel();
