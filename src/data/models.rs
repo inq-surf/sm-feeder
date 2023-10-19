@@ -18,4 +18,3 @@ pub struct Feed {
     pub enabled: bool,
     pub last_run: DateTime<Utc>,
 }
-

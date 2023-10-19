@@ -1,6 +1,9 @@
 use std::{env, error::Error};
 
-use surrealdb::{Surreal, engine::local::{Db, RocksDb}};
+use surrealdb::{
+    engine::local::{Db, RocksDb},
+    Surreal,
+};
 
 pub async fn get_db() -> Result<Surreal<Db>, Box<dyn Error>> {
     let path = env::current_dir()?;

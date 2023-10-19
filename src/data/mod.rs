@@ -1,5 +1,5 @@
+mod connection;
 mod migration;
-pub mod connection;
 pub mod models;
 
 use std::error::Error;
@@ -8,7 +8,10 @@ use chrono::prelude::*;
 use surrealdb::{engine::local::Db, Surreal};
 
 pub use self::connection::get_db;
-use self::{models::{Config, Feed}, migration::seed_db};
+use self::{
+    migration::seed_db,
+    models::{Config, Feed},
+};
 
 #[derive(Clone)]
 /// Access application data
