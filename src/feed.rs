@@ -4,7 +4,7 @@ use chrono::DateTime;
 use regex::Regex;
 use rss::Channel;
 
-use crate::data::models::Feed;
+use crate::data::models::{Feed, FeedItemDto};
 
 pub async fn load_feed(proxy: &str, feed: &Feed) -> Result<Channel, Box<dyn Error>> {
     let proxy = proxy.to_owned();
@@ -28,7 +28,7 @@ pub async fn load_feed(proxy: &str, feed: &Feed) -> Result<Channel, Box<dyn Erro
 
             item.description = match item.description() {
                 Some(description) => Some(clear_tags(&description)),
-                None => return item,
+                None => None,
             };
 
             item
@@ -45,4 +45,14 @@ fn clear_tags(content: &str) -> String {
 
     let content = tag_regex.replace_all(content, " ");
     space_regex.replace_all(&content, "\n").to_string()
+}
+
+pub fn item_to_dto(item: &rss::Item) -> FeedItemDto {
+    FeedItemDto {
+        guid: item.guid().unwrap().value().to_string(),
+        title: item.title().unwrap().to_string(),
+        link: item.link().unwrap().to_string(),
+        date: DateTime::parse_from_rfc2822(item.pub_date().unwrap()).unwrap(),
+        description: item.description().unwrap().to_string(),
+    }
 }

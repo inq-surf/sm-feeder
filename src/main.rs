@@ -8,20 +8,11 @@ use std::{
     sync::{mpsc::channel, Arc, RwLock},
 };
 
-use serde::Serialize;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 use data::Vault;
 use log::info;
 use messaging::Broker;
-
-#[derive(Serialize)]
-struct SerializedItem {
-    guid: String,
-    title: String,
-    link: String,
-    description: String,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -52,9 +43,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let feed = Arc::new(RwLock::new(feed));
 
         info!(
-            "Scheduling job [{cron}] for feed [{url}]",
+            "Scheduling job [{cron}] for feed [{name}]",
             cron = job_cron,
-            url = feed.read().unwrap().url
+            name = feed.read().unwrap().name
         );
         let feed_job = Job::new(job_cron, move |_uuid, _l| {
             let feed = Arc::clone(&feed);
@@ -76,22 +67,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         info!("Loading feed: {}", feed.url);
         if let Ok(channel) = feed::load_feed(&config.rss_proxy.as_str(), &feed).await {
-            vault.mark_feed_last_run(&mut feed).await?;
-
             for item in channel.items() {
-                let serialized_item = SerializedItem {
-                    guid: item.guid().unwrap().value().to_string(),
-                    title: item.title().unwrap().to_string(),
-                    link: item.link().unwrap().to_string(),
-                    description: item.description().unwrap().to_string(),
-                };
+                let item_dto = feed::item_to_dto(item);
+
+                vault.mark_feed_last_run(&mut feed, &item_dto.date).await?;
 
                 info!("Publishing item: {}", item.title().unwrap());
                 broker
                     .publish(
                         &config.rabbitmq_exchange,
                         &config.rabbitmq_routing_key,
-                        &serialized_item,
+                        &item_dto,
                     )
                     .await?;
             }

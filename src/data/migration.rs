@@ -1,6 +1,6 @@
 use std::{env, error::Error};
 
-use chrono::Utc;
+use chrono::{Utc, Local};
 use surrealdb::{engine::local::Db, Surreal};
 
 use super::models::{Config, Feed};
@@ -44,7 +44,7 @@ pub async fn seed_db(db: &Surreal<Db>) -> Result<Config, Box<dyn Error>> {
                         name: String::from(name),
                         cron: String::from(cron),
                         enabled: true,
-                        last_run: Utc::now(),
+                        last_run: Local::now().fixed_offset(),
                     })
                     .await?;
             }
@@ -57,7 +57,7 @@ pub async fn seed_db(db: &Surreal<Db>) -> Result<Config, Box<dyn Error>> {
                     name: String::from("BBC News"),
                     cron: String::from("0 */5 * * * *"),
                     enabled: true,
-                    last_run: Utc::now(),
+                    last_run: Local::now().fixed_offset(),
                 })
                 .await?;
         }

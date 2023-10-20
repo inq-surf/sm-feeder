@@ -4,7 +4,7 @@ pub mod models;
 
 use std::error::Error;
 
-use chrono::prelude::*;
+use chrono::{DateTime, FixedOffset};
 use surrealdb::{engine::local::Db, Surreal};
 
 pub use self::connection::get_db;
@@ -92,14 +92,20 @@ impl<'a> Vault<'a> {
         Ok(())
     }
 
-    pub async fn mark_feed_last_run(&self, feed: &mut Feed) -> Result<(), Box<dyn Error>> {
-        feed.last_run = Utc::now();
+    pub async fn mark_feed_last_run(
+        &self,
+        feed: &mut Feed,
+        new_run: &DateTime<FixedOffset>,
+    ) -> Result<(), Box<dyn Error>> {
+        if feed.last_run < *new_run {
+            feed.last_run = new_run.clone();
 
-        self.db
-            .query("update feed set last_run = $last_run where url = $url")
-            .bind(("url", feed.url.clone()))
-            .bind(("last_run", feed.last_run))
-            .await?;
+            self.db
+                .query("update feed set last_run = $last_run where url = $url")
+                .bind(("url", feed.url.clone()))
+                .bind(("last_run", feed.last_run))
+                .await?;
+        }
 
         Ok(())
     }
