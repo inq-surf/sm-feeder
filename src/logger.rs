@@ -5,8 +5,8 @@ pub fn init() {
         .format(|buf, record| {
             writeln!(
                 buf,
-                "[{level} {time} {file}:{line}] - {message}",
-                level = format!("{:<5}", record.level()),
+                "[{level:<5} {time} {file}:{line}] - {message}",
+                level = record.level(),
                 time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
                 file = record.file().unwrap_or("unknown"),
                 line = record.line().unwrap_or(0),
